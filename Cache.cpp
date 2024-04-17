@@ -4,8 +4,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <math.h>
 using namespace std;
-
+#define PAS 32 // (physical address space)
 unsigned long long totalBranches;
 
 void Cache::readFile(string fileName)
@@ -46,4 +47,61 @@ void Cache::readFile(string fileName)
             exit(1);
         }
     }
+}
+
+void Cache::directMapped(int cacheSize, int cacheLineSize)
+{
+    int cacheHit = 0;
+    int memoryAccessed = 0;
+
+    unsigned int numCacheLines = cacheSize / cacheLineSize;
+
+    vector<unsigned long long> cache(numCacheLines, 0);
+
+    for (int i = 0; i < tracesVect.size(); i++)
+    {
+        memoryAccessed++;
+        unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
+
+        // Dissect current address into 3 parts (tag,index,offset)
+        // Byte offset not needed
+        unsigned long long setIndex = (currentAddress / cacheLineSize) % numCacheLines;
+        unsigned long long tag = currentAddress / cacheSize;
+
+        if (cache.at(setIndex) == tag)
+        {
+            cacheHit++;
+        }
+        else
+        {
+            cache.at(setIndex) = tag;
+        }
+    }
+
+    cout << cacheHit << "," << memoryAccessed << ";" << endl;
+}
+
+void Cache::setAssociative(int cacheSize, int cacheLineSize)
+{
+    int cacheHit = 0;
+    int memoryAccessed = 0;
+
+    unsigned int numCacheLines = cacheSize / cacheLineSize;
+
+    vector<unsigned long long> cache(numCacheLines, 0);
+
+    for (int i = 0; i < tracesVect.size(); i++)
+    {
+        memoryAccessed++;
+        unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
+
+        // Dissect current address into 3 parts (tag,index,offset)
+        // Byte offset not needed
+        unsigned long long setIndex = (currentAddress / cacheLineSize) % numCacheLines;
+        unsigned long long tag = currentAddress / cacheSize;
+
+        // logic here
+    }
+
+    cout << cacheHit << "," << memoryAccessed << ";" << endl;
 }

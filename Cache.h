@@ -10,12 +10,12 @@ private:
     vector<unsigned long long> result;
 
 public:
-    void directMapped();
-    void setAssociative();
-    void fullyAssociative();
-    void setAssociativeNoAllocOnWriteMiss();
-    void setAssociativeNextLinePrefetch();
-    void prefetchOnMiss();
+    void directMapped(int cacheSize, int cacheLineSize);
+    void setAssociative(int cacheSize, int cacheLineSize);
+    void fullyAssociative(int cacheSize, int cacheLineSize);
+    void setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize);
+    void setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize);
+    void prefetchOnMiss(int cacheSize, int cacheLineSize);
     void readFile(string fileName);
     void writeFile(string fileName);
 };
