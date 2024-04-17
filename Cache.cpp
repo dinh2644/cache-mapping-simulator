@@ -7,7 +7,7 @@
 #include <math.h>
 using namespace std;
 #define PAS 32 // (physical address space)
-unsigned long long totalBranches;
+unsigned long long totalTraces;
 
 void Cache::readFile(string fileName)
 {
@@ -26,7 +26,7 @@ void Cache::readFile(string fileName)
     // The following loop will read a line at a time
     while (getline(infile, line))
     {
-        totalBranches++;
+        totalTraces++;
         // Now we have to parse the line into it's two pieces
         stringstream s(line);
         s >> flag >> std::hex >> byteMemAddr;
@@ -78,7 +78,7 @@ void Cache::directMapped(int cacheSize, int cacheLineSize)
         }
     }
 
-    cout << cacheHit << "," << memoryAccessed << ";" << endl;
+    result.push_back(cacheHit);
 }
 
 void Cache::setAssociative(int cacheSize, int cacheLineSize)
@@ -103,5 +103,20 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize)
         // logic here
     }
 
-    cout << cacheHit << "," << memoryAccessed << ";" << endl;
+    result.push_back(cacheHit);
+}
+
+void Cache::writeFile(string fileName)
+{
+    ofstream file(fileName);
+
+    for (int i = 0; i < result.size(); i++)
+    {
+        if (i >= 0 && i <= 4)
+        {
+            file << result.at(i) << "," << totalTraces << ";";
+        }
+    }
+
+    file.close();
 }
