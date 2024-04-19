@@ -11,7 +11,7 @@ private:
 
 public:
     void directMapped(int cacheSize, int cacheLineSize);
-    void setAssociative(int cacheSize, int cacheLineSize);
+    void setAssociative(int cacheSize, int cacheLineSize, int nWay);
     void fullyAssociative(int cacheSize, int cacheLineSize);
     void setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize);
     void setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize);

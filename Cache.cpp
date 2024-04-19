@@ -64,9 +64,10 @@ void Cache::directMapped(int cacheSize, int cacheLineSize)
         unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
 
         // Dissect current address into 3 parts (tag,index,offset)
-        // Byte offset not needed
         unsigned long long setIndex = (currentAddress / cacheLineSize) % numCacheLines;
-        unsigned long long tag = currentAddress / cacheSize;
+        unsigned long long setIndexBit = log2(1);
+        unsigned long long byteOffsetBit = log2(cacheLineSize);
+        unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
 
         if (cache.at(setIndex) == tag)
         {
@@ -78,17 +79,27 @@ void Cache::directMapped(int cacheSize, int cacheLineSize)
         }
     }
 
-    result.push_back(cacheHit);
+    cout << cacheHit << "," << memoryAccessed;
+    // result.push_back(cacheHit);
 }
 
-void Cache::setAssociative(int cacheSize, int cacheLineSize)
+void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
 {
     int cacheHit = 0;
-    int memoryAccessed = 0;
+    unsigned long long memoryAccessed = 0;
 
     unsigned int numCacheLines = cacheSize / cacheLineSize;
+    unsigned int numOfSets = numCacheLines / nWay;
 
-    vector<unsigned long long> cache(numCacheLines, 0);
+    // Give each Way(set) its own MRU counter to keep track whuich was used the most recently
+    struct Way
+    {
+        unsigned long long MRU = 0;
+        unsigned long long tag = 0;
+    };
+
+    // initialize a cache with numOfSets sets where each set contains nWay lines
+    vector<vector<Way>> cache(numOfSets, vector<Way>(nWay));
 
     for (int i = 0; i < tracesVect.size(); i++)
     {
@@ -96,14 +107,46 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize)
         unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
 
         // Dissect current address into 3 parts (tag,index,offset)
-        // Byte offset not needed
-        unsigned long long setIndex = (currentAddress / cacheLineSize) % numCacheLines;
-        unsigned long long tag = currentAddress / cacheSize;
+        unsigned long long setIndex = ((currentAddress / cacheLineSize) % numOfSets);
+        unsigned long long setIndexBit = log2(nWay);
+        unsigned long long byteOffsetBit = log2(cacheLineSize);
+        unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
 
-        // logic here
+        bool found = false;
+        // loop through each lines in the current set nWay times
+        for (int j = 0; j < nWay; j++)
+        {
+            if (cache[setIndex][j].tag == tag)
+            {
+                cacheHit++;
+                cache[setIndex][j].MRU = memoryAccessed;
+                found = true;
+                break;
+            }
+        }
+
+        // Replacement policy
+        if (!found)
+        {
+            unsigned long long minMRU = cache[setIndex][0].MRU;
+            int minIndex = 0;
+            // Loop through each line in a set to determine the LRU
+            for (int k = 1; k < nWay; k++)
+            {
+                if (cache[setIndex][k].MRU < minMRU)
+                {
+                    minMRU = cache[setIndex][k].MRU;
+                    minIndex = k;
+                }
+            }
+            // After determining which of the line is LRU, we'll replace that line with current tag/data
+            cache[setIndex][minIndex].tag = tag;
+            cache[setIndex][minIndex].MRU = memoryAccessed;
+        }
     }
 
-    result.push_back(cacheHit);
+    cout << cacheHit << "," << memoryAccessed;
+    // result.push_back(cacheHit);
 }
 
 void Cache::writeFile(string fileName)
@@ -114,7 +157,7 @@ void Cache::writeFile(string fileName)
     {
         if (i >= 0 && i <= 4)
         {
-            file << result.at(i) << "," << totalTraces << ";";
+            file << result.at(i) << "," << totalTraces << ";" << endl;
         }
     }
 
