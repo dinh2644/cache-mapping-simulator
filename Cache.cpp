@@ -79,8 +79,7 @@ void Cache::directMapped(int cacheSize, int cacheLineSize)
         }
     }
 
-    cout << cacheHit << "," << memoryAccessed;
-    // result.push_back(cacheHit);
+    result.push_back(cacheHit);
 }
 
 void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
@@ -145,8 +144,85 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
         }
     }
 
-    cout << cacheHit << "," << memoryAccessed;
-    // result.push_back(cacheHit);
+    result.push_back(cacheHit);
+}
+
+void Cache::fullyAssociative(int cacheSize, int cacheLineSize)
+{
+    int cacheHit = 0;
+    unsigned long long memoryAccessed = 0;
+
+    unsigned int numCacheLines = cacheSize / cacheLineSize;
+
+    struct Way
+    {
+        unsigned long long MRU = 0;
+        unsigned long long tag = 0;
+        unsigned long long hot_cold_bit = 0;
+    };
+
+    // initialize a cache with numOfSets sets where each set contains nWay lines
+    vector<Way> cache(numCacheLines);
+
+    for (int i = 0; i < tracesVect.size(); i++)
+    {
+        memoryAccessed++;
+        unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
+
+        // Dissect current address into 3 parts (tag,index,offset)
+        unsigned long long setIndex = ((currentAddress / cacheLineSize) % numCacheLines);
+        unsigned long long setIndexBit = log2(1);
+        unsigned long long byteOffsetBit = log2(cacheLineSize);
+        unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
+
+        bool found = false;
+        // loop through any slot in cache to check for cache hit or to insert it
+        for (int j = 0; j < numCacheLines; j++)
+        {
+            if (cache[j].tag == tag)
+            {
+                cacheHit++;
+                cache[j].MRU = memoryAccessed;
+                found = true;
+                break;
+            }
+        }
+
+        // LRU policy
+        if (!found)
+        {
+            unsigned long long minMRU = cache[0].MRU;
+            int minIndex = 0;
+            // Loop through each line in a set to determine the LRU
+            for (int k = 1; k < cache.size(); k++)
+            {
+                if (cache[k].MRU < minMRU)
+                {
+                    minMRU = cache[k].MRU;
+                    minIndex = k;
+                }
+            }
+            // After determining which of the line is LRU, we'll replace that line with current tag/data
+            cache[minIndex].tag = tag;
+            cache[minIndex].MRU = memoryAccessed;
+        }
+
+        // LFU policy (hot cold)
+        // if (!found)
+        // {
+        //     // loop trough each slot from beginning to check for any immediate open slot
+        //     for (int j = 0; j < cache.size(); j++)
+        //     {
+        //         if (cache[i].tag == 0)
+        //         {
+        //             cache[i].tag = tag;
+        //         }
+        //     }
+        // }
+    }
+
+    cout << cacheHit << "," << memoryAccessed << endl;
+    //  result.push_back(cacheHit);
 }
 
 void Cache::writeFile(string fileName)

@@ -17,18 +17,28 @@ int main(int argc, char const *argv[])
 
     // Caches sizez: 1KB, 4KB, 16KB, 32KB
     int cacheSize[4] = {1024, 4096, 16384, 32768};
-    int numCacheSizes = sizeof(cacheSize) / sizeof(cacheSize[0]);
+    int numCacheSize = sizeof(cacheSize) / sizeof(cacheSize[0]);
+
+    // associativity: 2, 4, 8, 16
+    int ways[4] = {2, 4, 8, 16};
+    int waySize = sizeof(cacheSize) / sizeof(cacheSize[0]);
 
     Cache c;
     c.readFile("project2/traces/trace1.txt");
 
-    // (cacheSize, cacheLineSize)
-    // for (int i = 0; i < numCacheSizes; i++)
+    // for (int i = 0; i < numCacheSize; i++)
     // {
+    //     // (cacheSize, cacheLineSize)
     //     c.directMapped(cacheSize[i], 32);
     // }
 
-    c.setAssociative(16384, 32, 4);
+    // for (int i = 0; i < waySize; i++)
+    // {
+    //     // (cacheSize, cacheLineSize, nWay)
+    //     c.setAssociative(16384, 32, ways[i]);
+    // }
+
+    c.fullyAssociative(16384, 32);
 
     // c.writeFile(outputFileName);
 
