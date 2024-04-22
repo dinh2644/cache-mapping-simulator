@@ -175,6 +175,9 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
         unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
 
         bool found = false;
+        int hitIndex = -1;
+        int currentIndex = -1;
+
         for (int i = 0; i < numCacheLines; i++)
         {
             if (cache[i].tag == tag)
@@ -182,30 +185,31 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
                 cacheHit++;
                 cache[i].MRU = memoryAccessed;
                 found = true;
+                hitIndex = i;
                 break;
             }
         }
 
         // pLRU Policy
-        if (!found && policy == "pLRU")
+        // Find a replacement index when cache miss occurs by flipping each bit starting from ROOT
+        if (!found)
         {
-            int victimIndex = -1;
-            int currentIndex = 0;
 
-            for (int i = 0; i < log2(numCacheLines); i++)
+            int victimIndex = -1;
+            currentIndex = 0; // root
+
+            for (int i = 0; i < log2(numCacheLines); i++) // log2(numCacheLines) = depth of tree
             {
-                // IF BIT = 0, SET TO 1
-                if (cache[currentIndex].hotColdBit % 2 == 0)
+                // IF CURRENT BIT 0, FLIP TO 1
+                if (cache[currentIndex].hotColdBit == 0)
                 {
-                    // set to 1
                     cache[currentIndex].hotColdBit = 1;
                     // TRAVERSE TO RIGHT CHILD
                     currentIndex = 2 * currentIndex + 2;
                 }
-
+                // IF CURRENT BIT 1, FLIP TO 0
                 else
                 {
-                    // IF BIT = 1, SET TO 0
                     cache[currentIndex].hotColdBit = 0;
                     // TRAVERSE TO LEFT CHILD
                     currentIndex = 2 * currentIndex + 1;
@@ -213,9 +217,30 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
             }
 
             victimIndex = currentIndex - (numCacheLines - 1);
-
             cache[victimIndex].tag = tag;
             cache[victimIndex].MRU = memoryAccessed;
+        }
+        // Flip each bit from the index the cache hit occured up to ROOT
+        else
+        {
+            currentIndex = hitIndex + (numCacheLines - 1);
+            for (int i = 0; i < log2(numCacheLines); i++) // log2(numCacheLines) = depth of tree
+            {
+                if (currentIndex % 2 == 0)
+                {
+                    // TRAVERSE TO PARENT NODE
+                    currentIndex = (currentIndex - 1) / 2;
+                    // FLIP BIT
+                    cache[currentIndex].hotColdBit = 1;
+                }
+                else
+                {
+                    // TRAVERSE TO PARENT NODE
+                    currentIndex = (currentIndex - 1) / 2;
+                    // FLIP BIT
+                    cache[currentIndex].hotColdBit = 0;
+                }
+            }
         }
     }
 
