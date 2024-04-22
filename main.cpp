@@ -46,7 +46,8 @@ int main(int argc, char const *argv[])
     //     c.setAssociativeNoAllocOnWriteMiss(16384, 32, ways[i]);
     // }
 
-    c.setAssociativeNextLinePrefetch(16384, 32, 2);
+    c.setAssociativeNextLinePrefetch(16384, 32, 16);
+    // c.prefetchOnMiss(16384, 32, 2);
 
     // c.writeFile(outputFileName);
 
