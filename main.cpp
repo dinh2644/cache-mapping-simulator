@@ -38,7 +38,15 @@ int main(int argc, char const *argv[])
     //     c.setAssociative(16384, 32, ways[i]);
     // }
 
-    c.fullyAssociative(16384, 32);
+    // c.fullyAssociative(16384, 32, "pLRU");
+
+    // for (int i = 0; i < waySize; i++)
+    // {
+    //     // (cacheSize, cacheLineSize, nWay)
+    //     c.setAssociativeNoAllocOnWriteMiss(16384, 32, ways[i]);
+    // }
+
+    c.setAssociativeNextLinePrefetch(16384, 32, 2);
 
     // c.writeFile(outputFileName);
 

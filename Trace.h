@@ -17,6 +17,6 @@ public:
     Trace(int flag, unsigned long long byteMemAddr) : flag(flag), byteMemAddr(byteMemAddr){};
 
     // Getters
-    int getFlag() const { return flag; }
+    int getFlag() const { return flag; } // 0 for load, 1 for store
     unsigned long long getByteMemAddr() const { return byteMemAddr; }
 };

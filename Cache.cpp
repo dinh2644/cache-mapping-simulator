@@ -147,7 +147,7 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
     result.push_back(cacheHit);
 }
 
-void Cache::fullyAssociative(int cacheSize, int cacheLineSize)
+void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
 {
     int cacheHit = 0;
     unsigned long long memoryAccessed = 0;
@@ -157,11 +157,11 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize)
     struct Way
     {
         unsigned long long MRU = 0;
-        unsigned long long tag = 0;
-        unsigned long long hot_cold_bit = 0;
+        unsigned long long tag = -1;
+        unsigned int hotColdBit = 0;
     };
 
-    // initialize a cache with numOfSets sets where each set contains nWay lines
+    // Cache initialization
     vector<Way> cache(numCacheLines);
 
     for (int i = 0; i < tracesVect.size(); i++)
@@ -169,60 +169,224 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize)
         memoryAccessed++;
         unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
 
-        // Dissect current address into 3 parts (tag,index,offset)
-        unsigned long long setIndex = ((currentAddress / cacheLineSize) % numCacheLines);
+        // Dissect current address into tag and index
         unsigned long long setIndexBit = log2(1);
         unsigned long long byteOffsetBit = log2(cacheLineSize);
         unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
 
         bool found = false;
-        // loop through any slot in cache to check for cache hit or to insert it
-        for (int j = 0; j < numCacheLines; j++)
+        for (int i = 0; i < numCacheLines; i++)
         {
-            if (cache[j].tag == tag)
+            if (cache[i].tag == tag)
             {
                 cacheHit++;
-                cache[j].MRU = memoryAccessed;
+                cache[i].MRU = memoryAccessed;
                 found = true;
                 break;
             }
         }
 
-        // LRU policy
-        if (!found)
+        // pLRU Policy
+        if (!found && policy == "pLRU")
         {
-            unsigned long long minMRU = cache[0].MRU;
+            int victimIndex = -1;
+            int currentIndex = 0;
+
+            for (int i = 0; i < log2(numCacheLines); i++)
+            {
+                // IF BIT = 0, SET TO 1
+                if (cache[currentIndex].hotColdBit % 2 == 0)
+                {
+                    // set to 1
+                    cache[currentIndex].hotColdBit = 1;
+                    // TRAVERSE TO RIGHT CHILD
+                    currentIndex = 2 * currentIndex + 2;
+                }
+
+                else
+                {
+                    // IF BIT = 1, SET TO 0
+                    cache[currentIndex].hotColdBit = 0;
+                    // TRAVERSE TO LEFT CHILD
+                    currentIndex = 2 * currentIndex + 1;
+                }
+            }
+
+            victimIndex = currentIndex - (numCacheLines - 1);
+
+            cache[victimIndex].tag = tag;
+            cache[victimIndex].MRU = memoryAccessed;
+        }
+    }
+
+    cout << cacheHit << "," << memoryAccessed << endl;
+}
+
+void Cache::setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize, int nWay)
+{
+    int cacheHit = 0;
+    unsigned long long memoryAccessed = 0;
+
+    unsigned int numCacheLines = cacheSize / cacheLineSize;
+    unsigned int numOfSets = numCacheLines / nWay;
+
+    // Give each Way(set) its own MRU counter to keep track whuich was used the most recently
+    struct Way
+    {
+        unsigned long long MRU = 0;
+        unsigned long long tag = 0;
+    };
+
+    // initialize a cache with numOfSets sets where each set contains nWay lines
+    vector<vector<Way>> cache(numOfSets, vector<Way>(nWay));
+
+    for (int i = 0; i < tracesVect.size(); i++)
+    {
+        memoryAccessed++;
+        unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
+        int currentFlag = tracesVect.at(i).getFlag();
+
+        // Dissect current address into 3 parts (tag,index,offset)
+        unsigned long long setIndex = ((currentAddress / cacheLineSize) % numOfSets);
+        unsigned long long setIndexBit = log2(nWay);
+        unsigned long long byteOffsetBit = log2(cacheLineSize);
+        unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
+
+        bool found = false;
+        // loop through each lines in the current set nWay times
+        for (int j = 0; j < nWay; j++)
+        {
+            if (cache[setIndex][j].tag == tag)
+            {
+                cacheHit++;
+                cache[setIndex][j].MRU = memoryAccessed;
+                found = true;
+                break;
+            }
+        }
+
+        // Replacement policy
+        if (!found && currentFlag != 1)
+        {
+            unsigned long long minMRU = cache[setIndex][0].MRU;
             int minIndex = 0;
             // Loop through each line in a set to determine the LRU
-            for (int k = 1; k < cache.size(); k++)
+            for (int k = 1; k < nWay; k++)
             {
-                if (cache[k].MRU < minMRU)
+                if (cache[setIndex][k].MRU < minMRU)
                 {
-                    minMRU = cache[k].MRU;
+                    minMRU = cache[setIndex][k].MRU;
                     minIndex = k;
                 }
             }
             // After determining which of the line is LRU, we'll replace that line with current tag/data
-            cache[minIndex].tag = tag;
-            cache[minIndex].MRU = memoryAccessed;
+            cache[setIndex][minIndex].tag = tag;
+            cache[setIndex][minIndex].MRU = memoryAccessed;
+        }
+    }
+
+    result.push_back(cacheHit);
+}
+
+void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int nWay)
+{
+    int cacheHit = 0;
+    unsigned long long memoryAccessed = 0;
+
+    unsigned int numCacheLines = cacheSize / cacheLineSize;
+    unsigned int numOfSets = numCacheLines / nWay;
+
+    // Give each Way(set) its own MRU counter to keep track whuich was used the most recently
+    struct Way
+    {
+        unsigned long long MRU = 0;
+        unsigned long long tag = 0;
+    };
+
+    // initialize a cache with numOfSets sets where each set contains nWay lines
+    vector<vector<Way>> cache(numOfSets, vector<Way>(nWay));
+
+    for (int i = 0; i < tracesVect.size(); i++)
+    {
+        memoryAccessed++;
+        unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
+
+        // Dissect current address into 3 parts (tag,index,offset)
+        unsigned long long setIndex = ((currentAddress / cacheLineSize) % numOfSets);
+        unsigned long long setIndexBit = log2(nWay);
+        unsigned long long byteOffsetBit = log2(cacheLineSize);
+        unsigned long long tag = currentAddress >> (setIndexBit + byteOffsetBit);
+
+        bool found = false;
+        // loop through each lines in the current set nWay times
+        for (int j = 0; j < nWay; j++)
+        {
+            if (cache[setIndex][j].tag == tag)
+            {
+                cacheHit++;
+                cache[setIndex][j].MRU = memoryAccessed;
+                found = true;
+                break;
+            }
         }
 
-        // LFU policy (hot cold)
-        // if (!found)
-        // {
-        //     // loop trough each slot from beginning to check for any immediate open slot
-        //     for (int j = 0; j < cache.size(); j++)
-        //     {
-        //         if (cache[i].tag == 0)
-        //         {
-        //             cache[i].tag = tag;
-        //         }
-        //     }
-        // }
+        // Replacement policy
+        if (!found)
+        {
+            unsigned long long minMRU = cache[setIndex][0].MRU;
+            int minIndex = 0;
+            // Loop through each line in a set to determine the LRU
+            for (int k = 1; k < nWay; k++)
+            {
+                if (cache[setIndex][k].MRU < minMRU)
+                {
+                    minMRU = cache[setIndex][k].MRU;
+                    minIndex = k;
+                }
+            }
+            // After determining which of the line is LRU, we'll replace that line with current tag/data
+            cache[setIndex][minIndex].tag = tag;
+            cache[setIndex][minIndex].MRU = memoryAccessed;
+        }
+
+        // Next line prefetching
+        unsigned long long setIndex1 = (setIndex + 1) % numOfSets;
+        unsigned long long tag1 = currentAddress + cacheLineSize >> (setIndexBit + byteOffsetBit);
+
+        bool found1 = false;
+        // loop through each lines in the current set nWay times
+        for (int j = 0; j < nWay; j++)
+        {
+            if (cache[setIndex1][j].tag == tag1)
+            {
+
+                cache[setIndex1][j].MRU = memoryAccessed;
+                found1 = true;
+                break;
+            }
+        }
+
+        // Replacement policy
+        if (!found1)
+        {
+            unsigned long long minMRU = cache[setIndex1][0].MRU;
+            int minIndex = 0;
+            // Loop through each line in a set to determine the LRU
+            for (int k = 1; k < nWay; k++)
+            {
+                if (cache[setIndex1][k].MRU < minMRU)
+                {
+                    minMRU = cache[setIndex1][k].MRU;
+                    minIndex = k;
+                }
+            }
+            // After determining which line is LRU, replace that line with the prefetched tag/data
+            cache[setIndex1][minIndex].tag = tag1;
+            cache[setIndex1][minIndex].MRU = memoryAccessed;
+        }
     }
 
     cout << cacheHit << "," << memoryAccessed << endl;
-    //  result.push_back(cacheHit);
 }
 
 void Cache::writeFile(string fileName)
