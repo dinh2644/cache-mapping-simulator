@@ -6,8 +6,7 @@
 #include <string>
 #include <math.h>
 using namespace std;
-#define PAS 32 // (physical address space)
-unsigned long long totalTraces;
+unsigned long long totalMemoryAccess;
 
 void Cache::readFile(string fileName)
 {
@@ -26,7 +25,7 @@ void Cache::readFile(string fileName)
     // The following loop will read a line at a time
     while (getline(infile, line))
     {
-        totalTraces++;
+        totalMemoryAccess++;
         // Now we have to parse the line into it's two pieces
         stringstream s(line);
         s >> flag >> std::hex >> byteMemAddr;
@@ -52,7 +51,6 @@ void Cache::readFile(string fileName)
 void Cache::directMapped(int cacheSize, int cacheLineSize)
 {
     int cacheHit = 0;
-    int memoryAccessed = 0;
 
     unsigned int numCacheLines = cacheSize / cacheLineSize;
 
@@ -60,7 +58,6 @@ void Cache::directMapped(int cacheSize, int cacheLineSize)
 
     for (int i = 0; i < tracesVect.size(); i++)
     {
-        memoryAccessed++;
         unsigned long long currentAddress = tracesVect.at(i).getByteMemAddr();
 
         // Dissect current address into 3 parts (tag,index,offset)
@@ -94,7 +91,7 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
     struct Way
     {
         unsigned long long MRU = 0;
-        unsigned long long tag = 0;
+        unsigned long long tag = -1;
     };
 
     // initialize a cache with numOfSets sets where each set contains nWay lines
@@ -113,12 +110,12 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
 
         bool found = false;
         // loop through each lines in the current set nWay times
-        for (int j = 0; j < nWay; j++)
+        for (int i = 0; i < nWay; i++)
         {
-            if (cache[setIndex][j].tag == tag)
+            if (cache[setIndex][i].tag == tag)
             {
                 cacheHit++;
-                cache[setIndex][j].MRU = memoryAccessed;
+                cache[setIndex][i].MRU = memoryAccessed;
                 found = true;
                 break;
             }
@@ -130,12 +127,12 @@ void Cache::setAssociative(int cacheSize, int cacheLineSize, int nWay)
             unsigned long long minMRU = cache[setIndex][0].MRU;
             int minIndex = 0;
             // Loop through each line in a set to determine the LRU
-            for (int k = 1; k < nWay; k++)
+            for (int i = 1; i < nWay; i++)
             {
-                if (cache[setIndex][k].MRU < minMRU)
+                if (cache[setIndex][i].MRU < minMRU)
                 {
-                    minMRU = cache[setIndex][k].MRU;
-                    minIndex = k;
+                    minMRU = cache[setIndex][i].MRU;
+                    minIndex = i;
                 }
             }
             // After determining which of the line is LRU, we'll replace that line with current tag/data
@@ -190,14 +187,33 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
             }
         }
 
+        // LRU policy
+        if (!found && policy == "LRU")
+        {
+            unsigned long long minMRU = cache[0].MRU;
+            int minIndex = 0;
+            // Loop through each line in a set to determine the LRU
+            for (int i = 1; i < cache.size(); i++)
+            {
+                if (cache[i].MRU < minMRU)
+                {
+                    minMRU = cache[i].MRU;
+                    minIndex = i;
+                }
+            }
+            // After determining which of the line is LRU, we'll replace that line with current tag/data
+            cache[minIndex].tag = tag;
+            cache[minIndex].MRU = memoryAccessed;
+        }
+
         // pLRU Policy
-        // Find a replacement index when cache miss occurs by flipping each bit starting from ROOT
-        if (!found)
+        if (!found && policy == "pLRU")
         {
 
             int victimIndex = -1;
             currentIndex = 0; // root
 
+            // Find a replacement index when cache MISS occurs by flipping each bit starting from ROOT
             for (int i = 0; i < log2(numCacheLines); i++) // log2(numCacheLines) = depth of tree
             {
                 // IF CURRENT BIT 0, FLIP TO 1
@@ -220,10 +236,12 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
             cache[victimIndex].tag = tag;
             cache[victimIndex].MRU = memoryAccessed;
         }
-        // Flip each bit from the index the cache hit occured up to ROOT
+
         else
         {
             currentIndex = hitIndex + (numCacheLines - 1);
+
+            // Flip each bit from the index the cache HIT occured up to ROOT
             for (int i = 0; i < log2(numCacheLines); i++) // log2(numCacheLines) = depth of tree
             {
                 if (currentIndex % 2 == 0)
@@ -244,7 +262,7 @@ void Cache::fullyAssociative(int cacheSize, int cacheLineSize, string policy)
         }
     }
 
-    cout << cacheHit << "," << memoryAccessed << endl;
+    result.push_back(cacheHit);
 }
 
 void Cache::setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize, int nWay)
@@ -259,7 +277,7 @@ void Cache::setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize, i
     struct Way
     {
         unsigned long long MRU = 0;
-        unsigned long long tag = 0;
+        unsigned long long tag = -1;
     };
 
     // initialize a cache with numOfSets sets where each set contains nWay lines
@@ -279,12 +297,12 @@ void Cache::setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize, i
 
         bool found = false;
         // loop through each lines in the current set nWay times
-        for (int j = 0; j < nWay; j++)
+        for (int i = 0; i < nWay; i++)
         {
-            if (cache[setIndex][j].tag == tag)
+            if (cache[setIndex][i].tag == tag)
             {
                 cacheHit++;
-                cache[setIndex][j].MRU = memoryAccessed;
+                cache[setIndex][i].MRU = memoryAccessed;
                 found = true;
                 break;
             }
@@ -296,12 +314,12 @@ void Cache::setAssociativeNoAllocOnWriteMiss(int cacheSize, int cacheLineSize, i
             unsigned long long minMRU = cache[setIndex][0].MRU;
             int minIndex = 0;
             // Loop through each line in a set to determine the LRU
-            for (int k = 1; k < nWay; k++)
+            for (int i = 1; i < nWay; i++)
             {
-                if (cache[setIndex][k].MRU < minMRU)
+                if (cache[setIndex][i].MRU < minMRU)
                 {
-                    minMRU = cache[setIndex][k].MRU;
-                    minIndex = k;
+                    minMRU = cache[setIndex][i].MRU;
+                    minIndex = i;
                 }
             }
             // After determining which of the line is LRU, we'll replace that line with current tag/data
@@ -325,7 +343,7 @@ void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int
     struct Way
     {
         unsigned long long MRU = 0;
-        unsigned long long tag = 0;
+        unsigned long long tag = -1;
     };
 
     // initialize a cache with numOfSets sets where each set contains nWay lines
@@ -344,12 +362,12 @@ void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int
 
         bool found = false;
         // loop through each lines in the current set nWay times
-        for (int j = 0; j < nWay; j++)
+        for (int i = 0; i < nWay; i++)
         {
-            if (cache[setIndex][j].tag == tag)
+            if (cache[setIndex][i].tag == tag)
             {
                 cacheHit++;
-                cache[setIndex][j].MRU = memoryAccessed;
+                cache[setIndex][i].MRU = memoryAccessed;
                 found = true;
                 break;
             }
@@ -361,12 +379,12 @@ void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int
             unsigned long long minMRU = cache[setIndex][0].MRU;
             int minIndex = 0;
             // Loop through each line in a set to determine the LRU
-            for (int k = 1; k < nWay; k++)
+            for (int i = 1; i < nWay; i++)
             {
-                if (cache[setIndex][k].MRU < minMRU)
+                if (cache[setIndex][i].MRU < minMRU)
                 {
-                    minMRU = cache[setIndex][k].MRU;
-                    minIndex = k;
+                    minMRU = cache[setIndex][i].MRU;
+                    minIndex = i;
                 }
             }
             // After determining which of the line is LRU, we'll replace that line with current tag/data
@@ -381,11 +399,11 @@ void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int
 
         bool nextFound = false;
         // loop through each lines in the current set nWay times
-        for (int j = 0; j < nWay; j++)
+        for (int i = 0; i < nWay; i++)
         {
-            if (cache[nextSetIndex][j].tag == nextTag)
+            if (cache[nextSetIndex][i].tag == nextTag)
             {
-                cache[nextSetIndex][j].MRU = memoryAccessed;
+                cache[nextSetIndex][i].MRU = memoryAccessed;
                 nextFound = true;
                 break;
             }
@@ -397,12 +415,12 @@ void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int
             unsigned long long minMRU = cache[nextSetIndex][0].MRU;
             int minIndex = 0;
             // Loop through each line in a set to determine the LRU
-            for (int k = 1; k < nWay; k++)
+            for (int i = 1; i < nWay; i++)
             {
-                if (cache[nextSetIndex][k].MRU < minMRU)
+                if (cache[nextSetIndex][i].MRU < minMRU)
                 {
-                    minMRU = cache[nextSetIndex][k].MRU;
-                    minIndex = k;
+                    minMRU = cache[nextSetIndex][i].MRU;
+                    minIndex = i;
                 }
             }
             // After determining which line is LRU, replace that line with the prefetched tag/data
@@ -411,7 +429,7 @@ void Cache::setAssociativeNextLinePrefetch(int cacheSize, int cacheLineSize, int
         }
     }
 
-    cout << cacheHit << "," << memoryAccessed << endl;
+    result.push_back(cacheHit);
 }
 
 void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
@@ -426,7 +444,7 @@ void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
     struct Way
     {
         unsigned long long MRU = 0;
-        unsigned long long tag = 0;
+        unsigned long long tag = -1;
     };
 
     // initialize a cache with numOfSets sets where each set contains nWay lines
@@ -445,12 +463,12 @@ void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
 
         bool found = false;
         // loop through each lines in the current set nWay times
-        for (int j = 0; j < nWay; j++)
+        for (int i = 0; i < nWay; i++)
         {
-            if (cache[setIndex][j].tag == tag)
+            if (cache[setIndex][i].tag == tag)
             {
                 cacheHit++;
-                cache[setIndex][j].MRU = memoryAccessed;
+                cache[setIndex][i].MRU = memoryAccessed;
                 found = true;
                 break;
             }
@@ -462,12 +480,12 @@ void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
             unsigned long long minMRU = cache[setIndex][0].MRU;
             int minIndex = 0;
             // Loop through each line in a set to determine the LRU
-            for (int k = 1; k < nWay; k++)
+            for (int i = 1; i < nWay; i++)
             {
-                if (cache[setIndex][k].MRU < minMRU)
+                if (cache[setIndex][i].MRU < minMRU)
                 {
-                    minMRU = cache[setIndex][k].MRU;
-                    minIndex = k;
+                    minMRU = cache[setIndex][i].MRU;
+                    minIndex = i;
                 }
             }
             // After determining which of the line is LRU, we'll replace that line with current tag/data
@@ -481,11 +499,11 @@ void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
 
             bool nextFound = false;
             // loop through each lines in the current set nWay times
-            for (int j = 0; j < nWay; j++)
+            for (int i = 0; i < nWay; i++)
             {
-                if (cache[nextSetIndex][j].tag == nextTag)
+                if (cache[nextSetIndex][i].tag == nextTag)
                 {
-                    cache[nextSetIndex][j].MRU = memoryAccessed;
+                    cache[nextSetIndex][i].MRU = memoryAccessed;
                     nextFound = true;
                     break;
                 }
@@ -497,12 +515,12 @@ void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
                 unsigned long long minMRU = cache[nextSetIndex][0].MRU;
                 int minIndex = 0;
                 // Loop through each line in a set to determine the LRU
-                for (int k = 1; k < nWay; k++)
+                for (int i = 1; i < nWay; i++)
                 {
-                    if (cache[nextSetIndex][k].MRU < minMRU)
+                    if (cache[nextSetIndex][i].MRU < minMRU)
                     {
-                        minMRU = cache[nextSetIndex][k].MRU;
-                        minIndex = k;
+                        minMRU = cache[nextSetIndex][i].MRU;
+                        minIndex = i;
                     }
                 }
                 // After determining which line is LRU, replace that line with the prefetched tag/data
@@ -512,7 +530,7 @@ void Cache::prefetchOnMiss(int cacheSize, int cacheLineSize, int nWay)
         }
     }
 
-    cout << cacheHit << "," << memoryAccessed << endl;
+    result.push_back(cacheHit);
 }
 
 void Cache::writeFile(string fileName)
@@ -521,9 +539,49 @@ void Cache::writeFile(string fileName)
 
     for (int i = 0; i < result.size(); i++)
     {
-        if (i >= 0 && i <= 4)
+        if (i >= 0 && i <= 2)
         {
-            file << result.at(i) << "," << totalTraces << ";" << endl;
+            if (i == 3)
+            {
+                file << result.at(i) << "," << totalMemoryAccess << ";" << endl;
+            }
+            file << result.at(i) << "," << totalMemoryAccess << "; ";
+        }
+        else if (i >= 4 && i <= 6)
+        {
+            if (i == 7)
+            {
+                file << result.at(i) << "," << totalMemoryAccess << ";" << endl;
+            }
+            file << result.at(i) << "," << totalMemoryAccess << "; ";
+        }
+        else if (i >= 10 && i <= 12)
+        {
+            if (i == 13)
+            {
+                file << result.at(i) << "," << totalMemoryAccess << ";" << endl;
+            }
+            file << result.at(i) << "," << totalMemoryAccess << "; ";
+        }
+        else if (i >= 14 && i <= 16)
+        {
+            if (i == 17)
+            {
+                file << result.at(i) << "," << totalMemoryAccess << ";" << endl;
+            }
+            file << result.at(i) << "," << totalMemoryAccess << "; ";
+        }
+        else if (i >= 18 && i <= 20)
+        {
+            if (i == 21)
+            {
+                file << result.at(i) << "," << totalMemoryAccess << ";" << endl;
+            }
+            file << result.at(i) << "," << totalMemoryAccess << "; ";
+        }
+        else
+        {
+            file << result.at(i) << "," << totalMemoryAccess << ";" << endl;
         }
     }
 
